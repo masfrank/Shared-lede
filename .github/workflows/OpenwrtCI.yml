@@ -8,7 +8,7 @@
 #
 # 源码采用lean lede或者lienol openwrt master分支
 #
-name: 固件编译
+name: OpenwrtAC
 on:
   workflow_dispatch:
     inputs:
