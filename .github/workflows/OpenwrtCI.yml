@@ -48,16 +48,6 @@ on:
         required: false
         default: 'false'
         type: boolean
-      release:
-        description: '上传到release'
-        required: true
-        default: 'true'
-        type: boolean
-      artifact:
-        description: '上传到artifact'
-        required: true
-        default: 'true'
-        type: boolean
 env:
   UPLOAD_BIN_DIR: true
   UPLOAD_FIRMWARE: true
