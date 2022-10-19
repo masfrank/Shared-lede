@@ -4,6 +4,11 @@ git clone https://github.com/coolsnowwolf/lede.git
 mv ./lede/* ./
 
 # 下载自定义插件
+# 删除原默认主题
+rm -rf package/lean/luci-theme-bootstrap
+rm -rf package/lean/luci-theme-material
+rm -rf package/lean/luci-theme-netgear
+rm -rf package/lean/luci-theme-ifit
 rm -rf package/lean/luci-theme-argon
 mkdir -p package/myapps
 cd package/myapps

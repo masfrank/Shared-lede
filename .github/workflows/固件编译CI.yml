@@ -50,13 +50,13 @@ on:
         type: boolean
       release:
         description: '上传到release'
-        required: false
+        required: true
         default: 'true'
         type: boolean
       artifact:
         description: '上传到artifact'
-        required: false
-        default: 'false'
+        required: true
+        default: 'true'
         type: boolean
 jobs:
   build_openwrt:
