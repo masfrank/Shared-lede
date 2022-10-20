@@ -1,0 +1,21 @@
+echo '# 防 IPID 检测' >> /etc/firewall.user
+echo 'iptables -t mangle -N IPID_MOD' >> /etc/firewall.user
+echo 'iptables -t mangle -A FORWARD -j IPID_MOD' >> /etc/firewall.user
+echo 'iptables -t mangle -A OUTPUT -j IPID_MOD' >> /etc/firewall.user
+echo 'iptables -t mangle -A IPID_MOD -d 0.0.0.0/8 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t mangle -A IPID_MOD -d 127.0.0.0/8 -j RETURN' >> /etc/firewall.user
+echo '# 由于本校局域网是 A 类网，所以我将这一条注释掉了，具体要不要注释结合你所在的校园网内网类型' >> /etc/firewall.user
+echo '# iptables -t mangle -A IPID_MOD -d 10.0.0.0/8 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t mangle -A IPID_MOD -d 172.16.0.0/12 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t mangle -A IPID_MOD -d 192.168.0.0/16 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t mangle -A IPID_MOD -d 255.0.0.0/8 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t mangle -A IPID_MOD -j MARK --set-xmark 0x10/0x10' >> /etc/firewall.user
+echo '# 防时钟偏移检测' >> /etc/firewall.user
+echo 'iptables -t nat -N ntp_force_local' >> /etc/firewall.user
+echo 'iptables -t nat -I PREROUTING -p udp --dport 123 -j ntp_force_local' >> /etc/firewall.user
+echo 'iptables -t nat -A ntp_force_local -d 0.0.0.0/8 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t nat -A ntp_force_local -d 127.0.0.0/8 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t nat -A ntp_force_local -d 192.168.0.0/16 -j RETURN' >> /etc/firewall.user
+echo 'iptables -t nat -A ntp_force_local -s 192.168.0.0/16 -j DNAT --to-destination 192.168.1.1' >> /etc/firewall.user
+echo '# 通过 iptables 修改 TTL 值' >> /etc/firewall.user
+echo 'iptables -t mangle -A POSTROUTING -j TTL --ttl-set 64' >> /etc/firewall.user
