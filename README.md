@@ -1,7 +1,7 @@
 # 使用 GitHub Actions 快速定制编译 OpenWrt 固件
 
 
-## 🪂🪂 该interim分支修复编译错误，临时使用。
+## 🪂🪂 该interim（main）分支修复编译错误，临时使用。
 
 
 流程文档参考[KFERMercer/OpenWrt-CI](https://github.com/KFERMercer/OpenWrt-CI)，十分感谢！
