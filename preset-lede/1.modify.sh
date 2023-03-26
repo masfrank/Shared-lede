@@ -10,7 +10,7 @@ sed -i '/uci commit system/i\uci set system.@system[0].hostname='R4A-G'' package
 sed -i 's/OpenWrt / $(TZ=UTC-8 date "+%Y.%m.%d") @ LH❥Ting /g' package/lean/default-settings/files/zzz-default-settings
 
 #更改主机型号，支持中文。 
-sed -i "s/Xiaomi Mi Router 4A Gigabit Edition/小米4A千兆版路由/g" target/linux/ramips/dts/mt7621_xiaomi_mi-router-4a-gigabit.dts
+sed -i "s/Xiaomi Mi Router 4A Gigabit Edition/Xiaomi Mi Router 4A Gigabit Edition 小米4A千兆版路由/g" target/linux/ramips/dts/mt7621_xiaomi_mi-router-4a-gigabit.dts
 
 #复制smartdns配置
 rm -rf feeds/packages/net/smartdns
@@ -31,10 +31,12 @@ sed -i '/KERNEL_PATCHVER/cKERNEL_PATCHVER:=5.10' target/linux/ramips/Makefile
 cp extra-files/322-mt7621-fix-cpu-clk-add-clkdev.patch target/linux/ramips/patches-5.10/
 
 #设置WIFI
-sed -i 's/OpenWrt/coolxiaomi/g' package/kernel/mac80211/files/lib/wifi/mac80211.sh
+sed -i 's/OpenWrt/Xiaomi_E2B0/g' package/kernel/mac80211/files/lib/wifi/mac80211.sh
 
-#修改登录密码为coolxiaomi
-sed -i '/root/croot:$1$CBd7u73H$LvSDVXLBrzpk4JfuuN.Lv1:18676:0:99999:7:::' package/base-files/files/etc/shadow
+# 修改默认wifi密码key为password
+sed -i 's/encryption=none/encryption=psk2/g' package/kernel/mac80211/files/lib/wifi/mac80211.sh
+sed -i '/set wireless.default_radio${devidx}.encryption=psk2/a\set wireless.default_radio${devidx}.key=password' package/kernel/mac80211/files/lib/wifi/mac80211.sh
+
 
 #替换geodata源
 . extra-files/update-geodata.sh
