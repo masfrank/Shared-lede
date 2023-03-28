@@ -37,5 +37,6 @@ sed -i 's/OpenWrt/Xiaomi_E2B0/g' package/kernel/mac80211/files/lib/wifi/mac80211
 sed -i 's/encryption=none/encryption=psk2/g' package/kernel/mac80211/files/lib/wifi/mac80211.sh
 sed -i '/set wireless.default_radio${devidx}.encryption=psk2/a\set wireless.default_radio${devidx}.key=password' package/kernel/mac80211/files/lib/wifi/mac80211.sh
 
+
 #替换geodata源
 . extra-files/update-geodata.sh
