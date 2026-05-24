@@ -196,7 +196,7 @@ Actions流程顺利完成后，去release(或者artifact)下载你的固件，re
 
     ```shell
     chmod +x extra-files/clone.sh
-    ./extra-files/clone.sh extra-files/clone.toml openwrt
+    ./extra-files/clone.sh extra-files/clone.toml lede
     cd _test_code
     ```
 
@@ -205,7 +205,11 @@ Actions流程顺利完成后，去release(或者artifact)下载你的固件，re
 1. （可选）从已有的.config修改。
 
      ```shell
-     cp ../preset-openwrt/other.config .config
+     cp ../preset-lede/1.config .config
+     ```
+
+          ```shell
+     cp ../preset-lede/2.config .config
      ```
 
 1. 运行以下命令，开始配置。
