@@ -72,6 +72,10 @@ on:
         description: '使用5.15内核(超频勿选此项)'
         required: false
         type: boolean
+      ap_mode:
+        description: '纯AP模式(首启自动:LAN走DHCP/关DHCP服务/所有网口桥接/去掉代理)'
+        required: false
+        type: boolean
       release:
         description: '上传到release'
         required: false
@@ -147,19 +151,28 @@ jobs:
           MODIFY_SH: ${{ steps.prepare-deployment.outputs.modify_sh }}
           CPUO: ${{ inputs.cpu_overclock }}
           K515: ${{ inputs.kernel_5_15 }}
+          APM: ${{ inputs.ap_mode }}
         run: |
           $CPUO && ! $K515 && \
             sed -i '/fix-cpu-clk-add-clkdev/ s/#//' $MODIFY_SH
           $K515 && \
             sed -i '/KERNEL_PATCHVER:=5.15/ s/#//' $MODIFY_SH
+          if [ "$APM" = "true" ]; then
+            mkdir -p files/etc
+            touch files/etc/ap-mode
+          fi
           chmod +x $MODIFY_SH
           $MODIFY_SH
 
       - name: Generate .config
         env:
           DOT_CONFIG: ${{ steps.prepare-deployment.outputs.dot_config }}
+          APM: ${{ inputs.ap_mode }}
         run: |
           mv $DOT_CONFIG .config
+          if [ "$APM" = "true" ]; then
+            sed -i -E 's/^CONFIG_PACKAGE_luci-app-ssr-plus=y$/# CONFIG_PACKAGE_luci-app-ssr-plus is not set/' .config
+          fi
           make defconfig
 
       - name: Make download

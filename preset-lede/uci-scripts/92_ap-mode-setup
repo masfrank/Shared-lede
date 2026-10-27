@@ -1,0 +1,205 @@
+#!/bin/sh
+#
+# Dumb AP (access point) first-boot defaults for Xiaomi Mi Router 4A Gigabit.
+#
+# Only active when the image was built with the "ap_mode" switch on, which drops
+# /etc/ap-mode into the overlay. Everything below is idempotent and runs once,
+# because /etc/uci-defaults scripts are removed after a successful run.
+#
+# Result:
+#   * every switch port (LAN1/LAN2/WAN) ends up in one bridge
+#   * LAN becomes a DHCP client of the upstream router, no DHCP/RA server
+#   * WAN interface and firewall zone are removed, so there is no router role
+#   * 5G is pinned to VHT80, 802.11k/v are enabled for roaming
+#   * proxy services are disabled
+#
+[ -e /etc/ap-mode ] || exit 0
+
+. /lib/functions.sh
+
+[ -f /etc/config/network ] || /bin/config_generate
+
+# ---------------------------------------------------------------------------
+# helpers
+# ---------------------------------------------------------------------------
+lan_device() {
+	local dev
+	dev=$(uci -q get network.lan.device)
+	[ -n "$dev" ] || dev=$(uci -q get network.lan.ifname)
+	echo "$dev"
+}
+
+wan_device() {
+	local dev
+	dev=$(uci -q get network.wan.device)
+	[ -n "$dev" ] || dev=$(uci -q get network.wan.ifname)
+	echo "$dev"
+}
+
+count_sections() {
+	# $1 = config name, e.g. switch_vlan or device
+	uci -q show network | grep -c "^network\.@$1\[[0-9]*\]=$1\$"
+}
+
+# swconfig layout (kernel 5.10 lede): network.lan.ifname='eth0.1' + switch_vlan
+merge_ports_swconfig() {
+	local dev vlan keep="" total idx ports p tag all="" cpu
+
+	dev=$(lan_device)
+	case "$dev" in
+	eth*.*) ;;
+	*) return 1 ;;
+	esac
+	vlan="${dev##*.}"
+
+	total=$(count_sections switch_vlan)
+	[ "$total" -gt 0 ] || return 1
+
+	idx=0
+	while [ "$idx" -lt "$total" ]; do
+		if [ "$(uci -q get network.@switch_vlan[$idx].vlan)" = "$vlan" ]; then
+			keep=$idx
+		fi
+		idx=$((idx + 1))
+	done
+	[ -n "$keep" ] || return 1
+
+	idx=0
+	while [ "$idx" -lt "$total" ]; do
+		ports=$(uci -q get network.@switch_vlan[$idx].ports)
+		for p in $ports; do
+			case "$p" in
+			*t) tag="$p" ;;
+			*) all="$all $p" ;;
+			esac
+		done
+		idx=$((idx + 1))
+	done
+
+	# drop duplicates, keep numeric order, append the CPU tag port
+	all=$(echo "$all" | tr ' ' '\n' | grep -v '^$' | sort -n -u | tr '\n' ' ')
+	uci -q set "network.@switch_vlan[$keep].ports=${all}${tag}"
+
+	# remove every other VLAN section, highest index first
+	idx=$((total - 1))
+	while [ "$idx" -ge 0 ]; do
+		if [ "$idx" != "$keep" ]; then
+			uci -q delete "network.@switch_vlan[$idx]"
+		fi
+		idx=$((idx - 1))
+	done
+	return 0
+}
+
+# DSA layout (kernel 5.15+): br-lan bridge device + dedicated wan port
+merge_ports_dsa() {
+	local br wan total idx
+
+	br=$(lan_device)
+	wan=$(wan_device)
+	[ -n "$br" ] && [ -n "$wan" ] || return 1
+
+	total=$(count_sections device)
+	idx=0
+	while [ "$idx" -lt "$total" ]; do
+		if [ "$(uci -q get network.@device[$idx].name)" = "$br" ]; then
+			case " $(uci -q get network.@device[$idx].ports) " in
+			*" $wan "*) return 0 ;;
+			esac
+			uci -q add_list "network.@device[$idx].ports=$wan"
+			return 0
+		fi
+		idx=$((idx + 1))
+	done
+	return 1
+}
+
+# ---------------------------------------------------------------------------
+# 1. one bridge for all physical ports
+# ---------------------------------------------------------------------------
+merge_ports_swconfig || merge_ports_dsa || true
+
+# ---------------------------------------------------------------------------
+# 2. LAN becomes a DHCP client, no server on this device
+# ---------------------------------------------------------------------------
+uci -q batch <<-EOF
+	set network.lan.proto='dhcp'
+	set network.lan.force_link='1'
+	set network.lan.delegate='0'
+	delete network.lan.ipaddr
+	delete network.lan.netmask
+	delete network.lan.ip6assign
+	delete network.wan
+	delete network.wan6
+	set network.lan6=interface
+	set network.lan6.proto='dhcpv6'
+	set network.lan6.device='@lan'
+	set network.lan6.reqaddress='try'
+	set network.lan6.delegate='0'
+	commit network
+
+	set dhcp.lan.ignore='1'
+	delete dhcp.lan.force
+	delete dhcp.lan.ra
+	delete dhcp.lan.dhcpv6
+	delete dhcp.lan.ndp
+	delete dhcp.wan
+	commit dhcp
+EOF
+
+# ---------------------------------------------------------------------------
+# 3. no router role: drop the wan firewall zone and the forwardings into it
+# ---------------------------------------------------------------------------
+zone_idx=$(uci -q show firewall | sed -n "s/^firewall\.@zone\[\([0-9]*\)\]=zone$/\1/p" | while read -r i; do
+	[ "$(uci -q get firewall.@zone[$i].name)" = "wan" ] && echo "$i"
+done | head -n 1)
+
+if [ -n "$zone_idx" ]; then
+	uci -q delete "firewall.@zone[$zone_idx]"
+fi
+
+fw_total=$(uci -q show firewall | grep -c '^firewall\.@forwarding\[[0-9]*\]=forwarding$')
+fw_idx=$((fw_total - 1))
+while [ "$fw_idx" -ge 0 ]; do
+	src=$(uci -q get "firewall.@forwarding[$fw_idx].src")
+	dst=$(uci -q get "firewall.@forwarding[$fw_idx].dest")
+	if [ "$src" = "wan" ] || [ "$dst" = "wan" ]; then
+		uci -q delete "firewall.@forwarding[$fw_idx]"
+	fi
+	fw_idx=$((fw_idx - 1))
+done
+uci -q commit firewall
+
+# ---------------------------------------------------------------------------
+# 4. wireless: pin 5G to VHT80, enable 802.11k/v for roaming with the gateway
+# ---------------------------------------------------------------------------
+[ -f /etc/config/wireless ] || wifi config >/dev/null 2>&1
+
+for radio in $(uci -q show wireless | sed -n 's/^\(wireless\.radio[0-9]*\)=wifi-device$/\1/p'); do
+	band=$(uci -q get "$radio.band")
+	if [ "$band" = "5g" ]; then
+		uci -q set "$radio.htmode=VHT80"
+	fi
+done
+
+for iface in $(uci -q show wireless | sed -n 's/^\(wireless\.default_radio[0-9]*\)=wifi-iface$/\1/p'); do
+	uci -q set "$iface.disabled=0"
+	uci -q set "$iface.ieee80211k=1"
+	uci -q set "$iface.bss_transition=1"
+done
+uci -q commit wireless
+
+# ---------------------------------------------------------------------------
+# 5. proxy services have no job on a dumb AP
+# ---------------------------------------------------------------------------
+for svc in ssrplus ssr-plus passwall passwall2; do
+	if [ -x "/etc/init.d/$svc" ]; then
+		/etc/init.d/"$svc" disable
+		/etc/init.d/"$svc" stop >/dev/null 2>&1
+	fi
+done
+
+# marker is only needed once
+rm -f /etc/ap-mode
+
+exit 0
